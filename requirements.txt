@@ -1,0 +1,16 @@
+numpy>=1.26
+scipy>=1.11
+pandas>=2.0
+h5py>=3.9
+matplotlib>=3.8
+pylandau>=2.0
+flufl.lock>=8
+plotly>=5
+# Database export only:
+SQLAlchemy>=2.0
+psycopg2-binary>=2.9
+influxdb>=5.3
+fsspec>=2024.6
+aiohttp>=3.9
+requests>=2.31
+openpyxl>=3.1
