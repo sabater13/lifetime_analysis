@@ -59,11 +59,12 @@ def gather_segments(paths, dset_key):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('files', nargs='+',
-                    help='FLOW HDF5 paths or a single quoted glob pattern')
+    ap.add_argument('files', nargs='+', help='FLOW HDF5 paths or a single quoted glob pattern')
     ap.add_argument('--output-plot', required=True)
     ap.add_argument('--output-json', required=True)
     ap.add_argument('--label', default='all_mip')
+    ap.add_argument('--window-start', default=None, help='ISO8601 UTC start of the data window (from bash driver)')
+    ap.add_argument('--window-end', default=None, help='ISO8601 UTC end of the data window (from bash driver)')
     args = ap.parse_args()
 
     # expand globs
@@ -102,7 +103,13 @@ def main():
     # langau fit
     import lifetime_funcs as LT
 
-    timestamp_str = datetime.now(timezone.utc).isoformat()
+    if args.window_end:
+        timestamp_str = datetime.fromisoformat(args.window_end.replace('Z', '+00:00')).isoformat()
+    elif args.window_start:
+        t0 = datetime.fromisoformat(args.window_start.replace('Z', '+00:00'))
+        timestamp_str = t0.isoformat()
+    else:
+        timestamp_str = datetime.now(timezone.utc).isoformat()
     title = f'{timestamp_str} ({args.label})  [{n_files} files pooled]'
 
     lifetime, lifetime_error, fig = LT.langau_lifetime(
@@ -122,6 +129,18 @@ def main():
     print(f'  n_segments    : {len(segments)}')
     print(f'  n_files pooled: {n_files}')
     print(f'{"="*55}\n')
+
+    # append lifetime to a file with the time of the measurement
+    timeseries_path = Path(args.output_json).parent.parent / 'lifetime_timeseries.json'
+    entry = dict(timestamp=timestamp_str, lifetime_us=lifetime, error_us=lifetime_error,
+                 n_segments=int(len(segments)), n_files=n_files)
+    if timeseries_path.exists():
+        timeseries = json.loads(timeseries_path.read_text())
+    else:
+        timeseries = []
+    timeseries.append(entry)
+    timeseries_path.write_text(json.dumps(timeseries, indent=2))
+    print(f'Time-series log → {timeseries_path}')
 
     import matplotlib
     matplotlib.use('Agg')
@@ -166,10 +185,23 @@ def main():
     ratio_err   = err_fit / fit_at_bins
 
     # fit to central bins
-    mask = (t_fit >= 60) & (t_fit <= 160)
+    mask = (t_fit >= 40) & (t_fit <= 180)
     t_c, mpv_c, err_c = t_fit[mask], mpv_fit[mask], err_fit[mask]
-
-    fit_at_bins = exp_model(t_c, A, tau)
+    
+    # Re-fit to the central window
+    p0 = [A, tau]
+    try:
+        popt, pcov = curve_fit(
+            exp_model, t_c, mpv_c,
+            sigma=err_c, absolute_sigma=True,
+            p0=p0,
+        )
+        A_c, tau_c = popt
+        tau_c_err = np.sqrt(pcov[1, 1])
+    except RuntimeError:
+        A_c, tau_c, tau_c_err = A, tau, float('nan')
+    
+    fit_at_bins = exp_model(t_c, A_c, tau_c)
     ratio       = mpv_c / fit_at_bins
     ratio_err   = err_c / fit_at_bins
 
@@ -179,8 +211,8 @@ def main():
     )
 
     t_smooth = np.linspace(t_fit[0], t_fit[-1], 500)
-    ax_main.plot(t_smooth, exp_model(t_smooth, A, tau), color='orange',
-                 label=f'$\\tau = {tau:.1f}$ µs,  $A = {A:.3f}$')
+    ax_main.plot(t_smooth, exp_model(t_smooth, A_c, tau_c), color='orange',
+                 label=f'$\\tau = {tau_c:.1f}$ µs,  $A = {A_c:.3f}$')
     ax_main.errorbar(t_fit, mpv_fit, yerr=err_fit,
                      fmt='o', color='black', label='Fitted bins', zorder=3)
     ax_main.set_ylabel('MPV of (dN/dx · dQ/dx)')
