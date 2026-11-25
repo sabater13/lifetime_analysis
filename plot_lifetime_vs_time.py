@@ -103,16 +103,18 @@ def main():
     ]:
         ax.axhline(ref, **style, label=lbl)
 
-    total_hours = (times[-1] - times[0]).total_seconds() / 3600
-    if total_hours <= 6:
-        major_locator = mdates.HourLocator(interval=1, tz=timezone.utc)
-    elif total_hours <= 24:
-        major_locator = mdates.HourLocator(interval=2, tz=timezone.utc)
-    else:
-        major_locator = mdates.HourLocator(interval=4, tz=timezone.utc)
-
+    # total_hours = (times[-1] - times[0]).total_seconds() / 3600
+    # if total_hours <= 6:
+    #     major_locator = mdates.HourLocator(interval=1, tz=timezone.utc)
+    # elif total_hours <= 24:
+    #     major_locator = mdates.HourLocator(interval=2, tz=timezone.utc)
+    # else:
+    #     major_locator = mdates.HourLocator(interval=4, tz=timezone.utc)
+    
+    major_locator = mdates.HourLocator(interval=10, tz=timezone.utc)
+    
     ax.xaxis.set_major_locator(major_locator)
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d\n%H:%M', tz=timezone.utc))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%d/%m\n%H:%M', tz=timezone.utc))
 
     # Force all tick labels to be visible (autofmt_xdate can hide them)
     plt.setp(ax.xaxis.get_majorticklabels(), rotation=0, ha='center', visible=True)
